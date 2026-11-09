@@ -1,0 +1,51 @@
+{
+  "name": "@inferva/skills",
+  "version": "0.1.0",
+  "description": "Agent Skills for paying for inference through INFERVA: connect an OpenAI-compatible client, check cost before and after a request, recover from every endpoint error, plan stake tiers from live parameters and audit settlement receipts.",
+  "license": "MIT",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/inferva/inferva-skills.git"
+  },
+  "homepage": "https://inferva.xyz",
+  "keywords": [
+    "agent-skills",
+    "skills",
+    "inference",
+    "ai-agents",
+    "openai-compatible",
+    "usdc",
+    "inferva"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "skills",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\" && tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.4",
+    "tsup": "^8.5.1",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.3"
+  }
+}
