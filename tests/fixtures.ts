@@ -4,17 +4,9 @@ import type { Params } from "../src/protocol.js";
 
 export const PARAMS: Params = {
   fee_bps: 1000,
-  staker_share_bps: 5000,
-  sponsor_share_bps: 4000,
+  sponsor_share_bps: 8000,
   epoch_seconds: 3600,
-  tier1_stake: 1_000_000_000,
-  tier2_stake: 10_000_000_000,
-  tier3_stake: 100_000_000_000,
-  tier1_discount_bps: 500,
-  tier2_discount_bps: 1000,
-  tier3_discount_bps: 2000,
   congestion_capacity_rpm: 600,
-  congestion_threshold_bps: 8000,
 };
 
 export const LIMITS: EndpointLimits = { maxMessages: 20, maxCharsPerMessage: 8000, maxOutputTokens: 1024 };
@@ -28,7 +20,10 @@ export const PROVIDERS: ProviderEntry[] = [
 
 const GENESIS = "0".repeat(64);
 
-/** A real record from the public settlement log (seq 1), used as a known-good hash vector. */
+/**
+ * A real record from the public settlement log (seq 1), used as a known-good hash vector. It was settled while the
+ * sponsor share was 40% of the fee (14 of 35); `discount`, `to_stakers` and `priority` are 0 as on every current record.
+ */
 export const RECORD_1: ChainRecord = {
   seq: 1,
   id: "req_b3554939b912de693875",

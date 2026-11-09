@@ -1,7 +1,7 @@
 {
   "name": "@inferva/skills",
   "version": "0.1.0",
-  "description": "Agent Skills for paying for inference through INFERVA: connect an OpenAI-compatible client, check cost before and after a request, recover from every endpoint error, plan stake tiers from live parameters and audit settlement receipts.",
+  "description": "Agent Skills for paying for inference through INFERVA: connect an OpenAI-compatible client, check cost before and after a request, recover from every endpoint error and audit settlement receipts.",
   "license": "MIT",
   "type": "module",
   "repository": {
@@ -15,7 +15,7 @@
     "inference",
     "ai-agents",
     "openai-compatible",
-    "usdc",
+    "usdg",
     "inferva"
   ],
   "main": "./dist/index.js",

@@ -19,11 +19,14 @@ prev_hash|id|payer|provider|model|tokens|base|discount|fee|capacity_id|epoch|cre
 
 - `prev_hash`: hash of the previous record, or the genesis value (`genesis` in the API) for the first record.
 - `provider` is the provider **id** (e.g. `prv_...`), not its display name.
-- `base`, `discount`, `fee` are integers in micro USDC; `tokens` is total tokens; `created_at` is Unix ms.
+- `base`, `discount`, `fee` are integers in micro USDG; `tokens` is total tokens; `created_at` is Unix ms.
+- `discount` is 0 on current records. It stays in the payload, so older records that carry a value still verify
+  exactly as before.
 - Numbers are written as plain integers (no separators, no decimals).
 
-`to_stakers`, `to_sponsor`, `to_treasury`, `priority` and token splits are on the record but not in the hash; the
-audit checks `to_stakers + to_sponsor + to_treasury = fee` separately.
+`to_sponsor`, `to_treasury` and token splits are on the record but not in the hash; the audit checks that
+`to_sponsor + to_treasury = fee` separately. Records also carry two legacy columns, `to_stakers` and `priority`,
+which are 0 on current records; `to_stakers` is kept in that sum so older records still balance.
 
 ## Public routes (no auth)
 
@@ -40,7 +43,7 @@ audit checks `to_stakers + to_sponsor + to_treasury = fee` separately.
    ```
    Checks: recomputed hash = record hash; `prev_hash` = previous record's hash (or genesis); the next record's
    `prev_hash` = this hash; fee split adds up; and with `--kept`: the kept `settlement.hash`, `prev_hash`,
-   `cost_usdc`, `capacity` and `epoch` match the log.
+   `cost_usdg`, `capacity` and `epoch` match the log.
 3. To audit the whole log (or the first N records):
    ```bash
    pnpm tsx skills/inferva-receipt-audit/scripts/verify.ts --chain [--max 1000]

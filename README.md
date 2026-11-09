@@ -1,12 +1,12 @@
 # INFERVA Skills
 
-Agent Skills that help AI agents use [INFERVA](https://inferva.xyz) well: connect, check cost, recover from errors,
-plan stake tiers and audit what they paid.
+Agent Skills that help AI agents use [INFERVA](https://inferva.xyz) well: connect, check cost, recover from errors
+and audit what they paid.
 
 **INFERVA** is one OpenAI-compatible endpoint that agents pay through. Each request is routed to a provider, metered,
-charged in USDC to the account that owns the agent key, and written to a hash-chained settlement log. Protocol fees go
-to $INFER stakers and to the capacity sponsors whose prepaid capacity serves the requests. INFERVA is launching on
-Elysium.
+charged in USDG to the account that owns the agent key, and written to a hash-chained settlement log. The protocol fee
+on each request is split between the capacity sponsor whose prepaid capacity served it and the treasury. INFERVA is
+launching on Robinhood Chain.
 
 - Website: https://inferva.xyz
 - Docs: https://docs.inferva.xyz
@@ -18,14 +18,13 @@ Elysium.
 | Skill | What it does | Helper |
 |---|---|---|
 | [`inferva-connect`](skills/inferva-connect/SKILL.md) | Point an OpenAI-compatible client at `https://dapp.inferva.xyz/v1` with an `inf_sk_` key; choose `auto` or a model id from `/v1/models`; know the request limits | none |
-| [`inferva-cost-check`](skills/inferva-cost-check/SKILL.md) | Worst-case cost before a request (the endpoint's own check), and the `inferva` block after it: `cost_usdc` and every breakdown field | `scripts/estimate.ts` |
+| [`inferva-cost-check`](skills/inferva-cost-check/SKILL.md) | Worst-case cost before a request (the endpoint's own check), and the `inferva` block after it: `cost_usdg` and every breakdown field | `scripts/estimate.ts` |
 | [`inferva-error-recovery`](skills/inferva-error-recovery/SKILL.md) | What to do for every error type: insufficient funds, spend cap, rate limit, congestion, capacity, revoked key, provider error, settlement busy | none |
-| [`inferva-tier-planner`](skills/inferva-tier-planner/SKILL.md) | From live parameters: the owner's tier, the stake that reaches the next one, and what changes (discount, rate limit, priority, admission under congestion) | `scripts/plan.ts` |
 | [`inferva-receipt-audit`](skills/inferva-receipt-audit/SKILL.md) | Recompute a receipt's SHA-256 hash, check both chain links and the kept response, or walk the whole settlement chain from genesis | `scripts/verify.ts` |
 
-No skill hardcodes a fee, discount, tier threshold or price. Helpers read them live from the public routes
-(`/api/params`, `/api/providers`, `/api/agents/catalog`, `/api/network`, `/api/receipts/:id`, `/api/chain`), because
-governance and providers can change them.
+No skill hardcodes a fee, fee share or price. Helpers read them live from the public routes (`/api/params`,
+`/api/providers`, `/api/agents/catalog`, `/api/network`, `/api/receipts/:id`, `/api/chain`), because governance and
+providers can change them.
 
 ## Install
 
@@ -68,7 +67,6 @@ const index = skillIndex(skills); // one line per skill, for the system prompt
 ```bash
 pnpm tsx skills/inferva-cost-check/scripts/estimate.ts --prompt "Summarise this report" --max-tokens 512
 pnpm tsx skills/inferva-cost-check/scripts/estimate.ts --explain response.json
-pnpm tsx skills/inferva-tier-planner/scripts/plan.ts --staked 0
 pnpm tsx skills/inferva-receipt-audit/scripts/verify.ts --id req_... --kept response.json
 pnpm tsx skills/inferva-receipt-audit/scripts/verify.ts --chain
 ```
@@ -77,7 +75,7 @@ All of them print JSON. They need no key: every route they read is public. Pass 
 deployment.
 
 The same functions are exported from the package (`estimateWorstCase`, `routeFor`, `explainInfervaBlock`,
-`planTier`, `tierLadder`, `verifyReceipt`, `verifyChain`, `settlementPayload`, ...), each taking an optional `fetch`.
+`quote`, `verifyReceipt`, `verifyChain`, `settlementPayload`, ...), each taking an optional `fetch`.
 
 ## Develop
 
@@ -91,7 +89,7 @@ pnpm build
 ## Security
 
 - Never commit, log or print an `inf_sk_` key. Keep it in an environment variable on the server side.
-- Anyone holding a key can spend the owner's USDC up to the key's spend cap. Set a cap and an allowed-models list
+- Anyone holding a key can spend the owner's USDG up to the key's spend cap. Set a cap and an allowed-models list
   per key in **Endpoint & keys**, and revoke or rotate a leaked key there.
 
 ## License

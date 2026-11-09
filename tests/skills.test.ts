@@ -9,7 +9,7 @@ const folders = readdirSync(ROOT, { withFileTypes: true })
   .filter((d) => d.isDirectory())
   .map((d) => d.name);
 
-const EXPECTED = ["inferva-connect", "inferva-cost-check", "inferva-error-recovery", "inferva-receipt-audit", "inferva-tier-planner"];
+const EXPECTED = ["inferva-connect", "inferva-cost-check", "inferva-error-recovery", "inferva-receipt-audit"];
 
 describe("every SKILL.md", () => {
   it("ships the v0.1 skill set", () => {

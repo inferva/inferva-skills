@@ -1,7 +1,7 @@
 // Cost before and after a request: the worst-case pre-check the endpoint runs, and the `inferva` block it returns.
 
 import type { EndpointLimits, ProviderEntry } from "./api.js";
-import { quote, toMicro, toUsdc, type Params, type Quote } from "./protocol.js";
+import { quote, toMicro, toUsdg, type Params, type Quote } from "./protocol.js";
 
 export type ChatMessage = { role?: string; content?: unknown };
 
@@ -9,10 +9,10 @@ export type Route = {
   providerId: string;
   providerName: string;
   model: string;
-  /** micro USDC per 1M tokens */
+  /** micro USDG per 1M tokens */
   priceIn: number;
   priceOut: number;
-  /** Highest per-1k price the route can charge (micro USDC), used by the worst-case check. */
+  /** Highest per-1k price the route can charge (micro USDG), used by the worst-case check. */
   worstPer1k: number;
   /** Effective per-1k price for an actual input/output split. */
   priceFor: (promptTokens: number, completionTokens: number) => number;
@@ -68,8 +68,6 @@ export type WorstCaseContext = {
   params: Params;
   providers: readonly ProviderEntry[];
   limits: EndpointLimits;
-  /** The key owner's tier discount. Default 0, which overstates the cost slightly for staked owners. */
-  discountBps?: number;
   /** The key's allowed-models list, if it has one. */
   allowed?: readonly string[] | null;
 };
@@ -81,8 +79,8 @@ export type WorstCase = {
   /** Tokens the endpoint assumes for the check: ceil(prompt chars / 3) + max_tokens. */
   worstTokens: number;
   quote: Quote;
-  /** USDC the key owner must hold (and a capped key must have left this month) for the request to be accepted. */
-  worstTotalUsdc: number;
+  /** USDG the key owner must hold (and a capped key must have left this month) for the request to be accepted. */
+  worstTotalUsdg: number;
   notes: string[];
 };
 
@@ -101,27 +99,23 @@ export function estimateWorstCase(input: WorstCaseInput, ctx: WorstCaseContext):
   const route = routeFor(wanted, ctx.providers, wanted === "auto" ? ctx.allowed : null);
   if (!route) throw new Error(`no routable provider serves "${wanted}" (the endpoint returns 404 model_not_found)`);
   const worstTokens = Math.ceil(prompt.length / 3) + maxTokens;
-  const discountBps = ctx.discountBps ?? 0;
-  const q = quote(worstTokens, route.worstPer1k, discountBps, ctx.params);
+  const q = quote(worstTokens, route.worstPer1k, ctx.params);
   if (input.messages.length > ctx.limits.maxMessages) notes.push(`Only the last ${ctx.limits.maxMessages} messages are used.`);
   if (Number(input.max_tokens) > maxOut) notes.push(`max_tokens is capped at ${maxOut}.`);
-  if (!ctx.discountBps) notes.push("No tier discount assumed; a staked key owner pays less.");
   notes.push("The final charge uses real token counts and is usually well below this worst case.");
   const { priceFor: _drop, ...routeInfo } = route;
-  return { route: routeInfo, maxTokens, promptChars: prompt.length, worstTokens, quote: q, worstTotalUsdc: toUsdc(q.total), notes };
+  return { route: routeInfo, maxTokens, promptChars: prompt.length, worstTokens, quote: q, worstTotalUsdg: toUsdg(q.total), notes };
 }
 
 /** Expected cost for a known (or guessed) input/output split on a route. */
-export function expectedCost(route: Route, promptTokens: number, completionTokens: number, discountBps: number, p: Params) {
-  return quote(promptTokens + completionTokens, route.priceFor(promptTokens, completionTokens), discountBps, p);
+export function expectedCost(route: Route, promptTokens: number, completionTokens: number, p: Params) {
+  return quote(promptTokens + completionTokens, route.priceFor(promptTokens, completionTokens), p);
 }
 
 export type InfervaBlock = {
   provider: string;
-  priority: boolean;
-  tier: string;
-  cost_usdc: number;
-  breakdown: { provider_cost: number; discount: number; protocol_fee: number; to_stakers: number; to_sponsor: number; to_treasury: number };
+  cost_usdg: number;
+  breakdown: { provider_cost: number; protocol_fee: number; to_sponsor: number; to_treasury: number };
   capacity: string;
   epoch: number;
   settlement: { hash: string; prev_hash: string };
@@ -134,17 +128,16 @@ export type BlockExplanation = { ok: boolean; problems: string[]; lines: string[
 export function explainInfervaBlock(block: InfervaBlock): BlockExplanation {
   const b = block.breakdown;
   const problems: string[] = [];
-  const m = { cost: toMicro(block.cost_usdc), base: toMicro(b.provider_cost), discount: toMicro(b.discount), fee: toMicro(b.protocol_fee) };
-  const split = toMicro(b.to_stakers) + toMicro(b.to_sponsor) + toMicro(b.to_treasury);
-  if (m.cost !== m.base - m.discount + m.fee) problems.push(`cost_usdc ${block.cost_usdc} ≠ provider_cost − discount + protocol_fee (${toUsdc(m.base - m.discount + m.fee)})`);
-  if (split !== m.fee) problems.push(`to_stakers + to_sponsor + to_treasury (${toUsdc(split)}) ≠ protocol_fee ${b.protocol_fee}`);
+  const m = { cost: toMicro(block.cost_usdg), base: toMicro(b.provider_cost), fee: toMicro(b.protocol_fee) };
+  const split = toMicro(b.to_sponsor) + toMicro(b.to_treasury);
+  if (m.cost !== m.base + m.fee) problems.push(`cost_usdg ${block.cost_usdg} ≠ provider_cost + protocol_fee (${toUsdg(m.base + m.fee)})`);
+  if (split !== m.fee) problems.push(`to_sponsor + to_treasury (${toUsdg(split)}) ≠ protocol_fee ${b.protocol_fee}`);
   if (!/^[0-9a-f]{64}$/.test(block.settlement?.hash ?? "")) problems.push("settlement.hash is not 64 hex characters");
   if (!/^[0-9a-f]{64}$/.test(block.settlement?.prev_hash ?? "")) problems.push("settlement.prev_hash is not 64 hex characters");
   const lines = [
-    `Charged ${block.cost_usdc} USDC: provider cost ${b.provider_cost} − ${block.tier} discount ${b.discount} + protocol fee ${b.protocol_fee}.`,
+    `Charged ${block.cost_usdg} USDG: provider cost ${b.provider_cost} + protocol fee ${b.protocol_fee}.`,
     `${block.provider} served it from sponsored capacity ${block.capacity}; the sponsor is repaid the provider cost and earns ${b.to_sponsor} of the fee.`,
-    b.to_stakers > 0 ? `${b.to_stakers} USDC of the fee went to $INFER stakers.` : "Nothing went to stakers on this request (with no stake on the network, the staker share goes to the treasury).",
-    `${b.to_treasury} USDC went to the treasury. Settled in epoch ${block.epoch}${block.priority ? " with the priority flag" : ""}.`,
+    `${b.to_treasury} USDG of the fee went to the treasury. Settled in epoch ${block.epoch}.`,
     `Settlement hash ${block.settlement?.hash}, chained to ${block.settlement?.prev_hash}. Receipt: ${block.receipt}`,
   ];
   const id = /\/receipt\/([^/?#]+)/.exec(block.receipt ?? "")?.[1] ?? null;

@@ -20,10 +20,8 @@ async function chain(n: number): Promise<ChainRecord[]> {
 
 const kept: InfervaBlock = {
   provider: "Basalt Inference",
-  priority: false,
-  tier: "No tier",
-  cost_usdc: 0.000381,
-  breakdown: { provider_cost: 0.000346, discount: 0, protocol_fee: 0.000035, to_stakers: 0, to_sponsor: 0.000014, to_treasury: 0.000021 },
+  cost_usdg: 0.000381,
+  breakdown: { provider_cost: 0.000346, protocol_fee: 0.000035, to_sponsor: 0.000014, to_treasury: 0.000021 },
   capacity: RECORD_1.capacity_id,
   epoch: RECORD_1.epoch,
   settlement: { hash: RECORD_1.hash, prev_hash: RECORD_1.prev_hash },
@@ -37,10 +35,18 @@ describe("verifyReceipt", () => {
     expect(v.ok).toBe(true);
   });
   it("detects a tampered field, a broken link and a kept-response mismatch", async () => {
-    const v = await verifyReceipt(receiptFor({ ...RECORD_1, fee: 1 }, null, { seq: 2, id: "req_2", prev_hash: "f".repeat(64) }), { ...kept, cost_usdc: 1 });
+    const v = await verifyReceipt(receiptFor({ ...RECORD_1, fee: 1 }, null, { seq: 2, id: "req_2", prev_hash: "f".repeat(64) }), { ...kept, cost_usdg: 1 });
     const failed = v.checks.filter((c) => !c.ok).map((c) => c.name);
     expect(failed).toEqual(expect.arrayContaining(["hash", "next link", "kept cost", "fee split"]));
     expect(v.ok).toBe(false);
+  });
+  it("still verifies an older record that carries a discount and the legacy to_stakers column", async () => {
+    const old = { ...RECORD_1, discount: 17, to_stakers: 17, to_sponsor: 14, to_treasury: 4, priority: 1, hash: "" };
+    old.hash = await sha256Hex(settlementPayload(old, old.prev_hash));
+    const cost = (old.base - old.discount + old.fee) / 1e6;
+    const v = await verifyReceipt(receiptFor(old), { ...kept, cost_usdg: cost, settlement: { hash: old.hash, prev_hash: old.prev_hash } });
+    expect(v.checks.filter((c) => !c.ok)).toEqual([]);
+    expect(v.checks.find((c) => c.name === "kept cost")!.detail).toMatch(/base − discount \+ fee/);
   });
   it("checks the prev link against the previous record", async () => {
     const [a, b] = await chain(2);

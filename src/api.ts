@@ -44,7 +44,7 @@ export async function fetchParams(o?: ApiOptions): Promise<{ params: Params; inf
   return getJson("/api/params", o);
 }
 
-export type ModelEntry = { id: string; object: "model"; owned_by: string; description?: string; price_per_1k_usdc?: number };
+export type ModelEntry = { id: string; object: "model"; owned_by: string; description?: string; price_per_1k_usdg?: number };
 
 /** `auto` plus every model an active provider serves. */
 export async function fetchModels(o?: ApiOptions): Promise<ModelEntry[]> {
@@ -59,7 +59,7 @@ export type ProviderEntry = {
   weight: number;
   routable: boolean;
   created_at: number;
-  /** Per-model prices, micro USDC per 1M tokens, input and output. */
+  /** Per-model prices, micro USDG per 1M tokens, input and output. */
   model_prices: ProviderModelPrice[];
 };
 
@@ -69,17 +69,30 @@ export async function fetchProviders(o?: ApiOptions): Promise<ProviderEntry[]> {
 }
 
 export type EndpointLimits = { maxMessages: number; maxCharsPerMessage: number; maxOutputTokens: number };
-export type Catalog = { models: unknown[]; tier: { name: string; discountBps: number }; fee_bps: number; limits: EndpointLimits; window_days: number };
+export type Catalog = { models: unknown[]; fee_bps: number; limits: EndpointLimits; window_days: number };
 
 /** The model catalog; its `limits` are the hard limits the endpoint enforces. */
 export async function fetchCatalog(o?: ApiOptions): Promise<Catalog> {
   return getJson("/api/agents/catalog", o);
 }
 
-export type TierState = { tier: number; name: string; ceiling: number; admitted: number; deferred: number; open: boolean };
-export type NetworkState = { capacity: number; thresholdBps: number; load: number; congested: boolean; tiers: TierState[] };
+/**
+ * Live gateway load. Every caller shares one lane: requests are admitted while the load (admitted requests in the
+ * last minute) is under capacity, and deferred with a 429 and Retry-After above it.
+ */
+export type NetworkState = {
+  capacity: number;
+  load: number;
+  attempts: number;
+  congested: boolean;
+  admitted: number;
+  deferred: number;
+  minutes: { minute: number; admitted: number; deferred: number }[];
+  activeProviders: number;
+  routableProviders: number;
+};
 
-/** Live congestion meter: load over the last minute and which tiers are still admitted. */
+/** Live congestion meter: load over the last minute against capacity. */
 export async function fetchNetwork(o?: ApiOptions): Promise<NetworkState> {
   return getJson("/api/network", o);
 }
@@ -92,12 +105,15 @@ export type ChainRecord = {
   model: string;
   tokens: number;
   base: number;
+  /** Hashed. 0 on current records; older records may carry a value. */
   discount: number;
   fee: number;
+  /** Legacy column, not hashed. 0 on current records. */
   to_stakers: number;
   to_sponsor: number;
   to_treasury: number;
   capacity_id: string;
+  /** Legacy column, not hashed. 0 on current records. */
   priority: number;
   epoch: number;
   prev_hash: string;

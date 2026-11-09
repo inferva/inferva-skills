@@ -29,13 +29,15 @@ export async function verifyReceipt(receipt: Receipt, kept?: InfervaBlock | null
   if (kept) {
     checks.push(kept.settlement?.hash === r.hash ? pass("kept hash", "matches the hash returned with the response") : fail("kept hash", `response said ${kept.settlement?.hash}, log says ${r.hash}`));
     checks.push(kept.settlement?.prev_hash === r.prev_hash ? pass("kept prev_hash", "matches") : fail("kept prev_hash", `response said ${kept.settlement?.prev_hash}, log says ${r.prev_hash}`));
+    // discount is 0 on current records; older records may carry one, and it was taken off the charge.
     const charged = r.base - r.discount + r.fee;
-    checks.push(toMicro(kept.cost_usdc) === charged ? pass("kept cost", `${kept.cost_usdc} USDC = base − discount + fee`) : fail("kept cost", `response said ${kept.cost_usdc} USDC, record charges ${charged / 1e6}`));
+    checks.push(toMicro(kept.cost_usdg) === charged ? pass("kept cost", `${kept.cost_usdg} USDG = ${r.discount ? "base − discount + fee" : "base + fee"}`) : fail("kept cost", `response said ${kept.cost_usdg} USDG, record charges ${charged / 1e6}`));
     checks.push(kept.capacity === r.capacity_id ? pass("kept capacity", r.capacity_id) : fail("kept capacity", `response said ${kept.capacity}, log says ${r.capacity_id}`));
     checks.push(kept.epoch === r.epoch ? pass("kept epoch", String(r.epoch)) : fail("kept epoch", `response said ${kept.epoch}, log says ${r.epoch}`));
   }
+  // to_stakers is a legacy column, 0 on current records; it stays in the sum so older records still balance.
   const split = r.to_stakers + r.to_sponsor + r.to_treasury;
-  checks.push(split === r.fee ? pass("fee split", "to_stakers + to_sponsor + to_treasury = fee") : fail("fee split", `split ${split} ≠ fee ${r.fee}`));
+  checks.push(split === r.fee ? pass("fee split", "to_sponsor + to_treasury = fee") : fail("fee split", `split ${split} ≠ fee ${r.fee}`));
   return { ok: checks.every((c) => c.ok), checks };
 }
 

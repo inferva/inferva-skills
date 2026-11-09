@@ -21,7 +21,7 @@ describe("routeFor", () => {
     expect(r.worstPer1k).toBe(2600);
     expect(r.priceFor(1000, 0)).toBe(1000);
     expect(r.priceFor(0, 1000)).toBe(2600);
-    expect(expectedCost(r, 500, 500, 0, PARAMS).base).toBe(1800);
+    expect(expectedCost(r, 500, 500, PARAMS).base).toBe(1800);
   });
 });
 
@@ -46,12 +46,13 @@ describe("estimateWorstCase", () => {
     expect(w.worstTokens).toBe(100);
     expect(w.quote.base).toBe(260);
     expect(w.quote.fee).toBe(26);
-    expect(w.worstTotalUsdc).toBeCloseTo(0.000286, 9);
+    expect(w.worstTotalUsdg).toBeCloseTo(0.000286, 9);
+    expect(w.quote.toSponsor + w.quote.toTreasury).toBe(26);
   });
-  it("clamps max_tokens and applies a tier discount", () => {
-    const w = estimateWorstCase({ messages: [{ content: "hi" }], max_tokens: 99_999 }, { params: PARAMS, providers: PROVIDERS, limits: LIMITS, discountBps: 1000 });
+  it("clamps max_tokens", () => {
+    const w = estimateWorstCase({ messages: [{ content: "hi" }], max_tokens: 99_999 }, { params: PARAMS, providers: PROVIDERS, limits: LIMITS });
     expect(w.maxTokens).toBe(1024);
-    expect(w.quote.discount).toBe(Math.floor(w.quote.base / 10));
+    expect(w.quote.total).toBe(w.quote.base + w.quote.fee);
     expect(w.notes.join(" ")).toMatch(/capped/);
   });
   it("mirrors the endpoint's rejections", () => {
@@ -65,10 +66,8 @@ describe("estimateWorstCase", () => {
 
 const block: InfervaBlock = {
   provider: "Provider B",
-  priority: false,
-  tier: "Tier 1",
-  cost_usdc: 0.00105,
-  breakdown: { provider_cost: 0.001, discount: 0.00005, protocol_fee: 0.0001, to_stakers: 0.00005, to_sponsor: 0.00004, to_treasury: 0.00001 },
+  cost_usdg: 0.0011,
+  breakdown: { provider_cost: 0.001, protocol_fee: 0.0001, to_sponsor: 0.00008, to_treasury: 0.00002 },
   capacity: "cap_x",
   epoch: 42,
   settlement: { hash: "a".repeat(64), prev_hash: "b".repeat(64) },
@@ -80,10 +79,10 @@ describe("explainInfervaBlock", () => {
     const e = explainInfervaBlock(block);
     expect(e.ok).toBe(true);
     expect(e.requestId).toBe("req_abc");
-    expect(e.lines[0]).toContain("0.00105");
+    expect(e.lines[0]).toContain("0.0011 USDG");
   });
   it("flags arithmetic that does not add up", () => {
-    const e = explainInfervaBlock({ ...block, cost_usdc: 0.002, breakdown: { ...block.breakdown, to_treasury: 0.1 } });
+    const e = explainInfervaBlock({ ...block, cost_usdg: 0.002, breakdown: { ...block.breakdown, to_treasury: 0.1 } });
     expect(e.ok).toBe(false);
     expect(e.problems).toHaveLength(2);
   });
@@ -94,16 +93,15 @@ describe("explainInfervaBlock", () => {
 });
 
 describe("estimate() reads everything live", () => {
-  it("fetches params, providers and limits, then applies the owner's tier", async () => {
+  it("fetches params, providers and limits", async () => {
     const { fetch, calls } = mockFetch({
       "/api/params": { params: PARAMS, info: {} },
       "/api/providers": PROVIDERS,
-      "/api/agents/catalog": { models: [], tier: { name: "No tier", discountBps: 0 }, fee_bps: PARAMS.fee_bps, limits: LIMITS, window_days: 30 },
+      "/api/agents/catalog": { models: [], fee_bps: PARAMS.fee_bps, limits: LIMITS, window_days: 30 },
     });
-    const out = await estimate({ messages: [{ role: "user", content: "hello" }], max_tokens: 10 }, { fetch, stakedInfer: 10_000 });
+    const out = await estimate({ messages: [{ role: "user", content: "hello" }], max_tokens: 10 }, { fetch });
     expect(calls.sort()).toEqual(["/api/agents/catalog", "/api/params", "/api/providers"]);
-    expect(out.tier).toBe("Tier 2");
     expect(out.route.model).toBe("b-fast");
-    expect(out.quote.discount).toBe(Math.floor(out.quote.base / 10));
+    expect(out.quote.total).toBe(out.quote.base + out.quote.fee);
   });
 });

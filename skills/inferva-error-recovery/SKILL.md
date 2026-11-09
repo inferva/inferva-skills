@@ -18,12 +18,12 @@ content already delivered is charged even if the stream ends early.
 |---|---|---|---|
 | 400 | `invalid_request_error` | No `messages` array, or no message has text | Fix the request. Do not retry unchanged. |
 | 401 | `invalid_api_key` | Missing `Authorization: Bearer inf_sk_...`, unknown key, revoked key, or the owner account is gone | Check the env var is set and sent. If it was revoked or rotated, a rotation issues a new secret with the same name and limits and revokes the old one at once: ask the owner for the new key from **Endpoint & keys**. Never retry in a loop. |
-| 402 | `insufficient_funds` | The owner's USDC cannot cover the worst case ("can cost up to …") or the actual cost ("costs … and the key owner has …"), or the balance moved during the request | Lower `max_tokens`, trim the prompt or pick a cheaper model (estimate with `inferva-cost-check`). Otherwise the owner must add USDC. "Balance changed" can be retried once. |
-| 402 | `spend_cap_reached` | The key's monthly spend cap is used up, or this request's worst case does not fit in what is left (in-flight requests on the same key hold their worst case) | If the message says the cap is reached: stop using this key until the reset date it names (start of the next UTC month), or ask the owner to raise the cap. If it says "has X USDC left": shrink the request to fit, or wait for parallel requests to finish. |
+| 402 | `insufficient_funds` | The owner's USDG cannot cover the worst case ("can cost up to …") or the actual cost ("costs … and the key owner has …"), or the balance moved during the request | Lower `max_tokens`, trim the prompt or pick a cheaper model (estimate with `inferva-cost-check`). Otherwise the owner must add USDG. "Balance changed" can be retried once. |
+| 402 | `spend_cap_reached` | The key's monthly spend cap is used up, or this request's worst case does not fit in what is left (in-flight requests on the same key hold their worst case) | If the message says the cap is reached: stop using this key until the reset date it names (start of the next UTC month), or ask the owner to raise the cap. If it says "has X USDG left": shrink the request to fit, or wait for parallel requests to finish. |
 | 403 | `model_not_allowed` | The key has an allowed-models list and this id is not on it | Use one of the models the message lists, or `auto` (which stays inside the list). |
 | 404 | `model_not_found` | No active provider serves that id (or none serves any model the key may use) | Re-read `GET /v1/models` and pick a listed id, or use `auto`. |
-| 429 | `rate_limit_exceeded` | The account (all its keys together) hit its tier's requests per minute over the last 60 s | Wait for `Retry-After` (seconds). Spread calls out. A lasting need for more throughput is a stake decision: see `inferva-tier-planner`. |
-| 429 | `congestion_deferred` | The network is congested and this tier is being deferred so higher tiers keep being served. Header `x-inferva-load: load/capacity` | Wait `Retry-After` seconds (it is computed from when load drops under this tier's ceiling), then retry. Check `GET /api/network` for which tiers are open. Higher tiers are admitted at higher load. |
+| 429 | `rate_limit_exceeded` | The account (all its keys together) sent 10 requests in the last 60 s. The limit is the same for every account | Wait for `Retry-After` (seconds). Spread calls out or batch work into fewer requests. |
+| 429 | `congestion_deferred` | The gateway is at capacity (admitted requests in the last minute ≥ `congestion_capacity_rpm`). Every caller shares the same lane. Header `x-inferva-load: load/capacity` | Wait `Retry-After` seconds (it is computed from when load drops back under capacity), then retry. `GET /api/network` shows the live load. |
 | 502 | `provider_error` | The provider could not complete the request; not charged | Retry once after a short pause. If it repeats, pick a different model id (another provider) or `auto`. |
 | 503 | `capacity_exhausted` | No sponsored capacity position has room for this request's provider cost | Smaller requests may still fit (less `max_tokens`). Otherwise wait, or the owner can sponsor capacity in the app. Retry with backoff; "used up by another request" can be retried immediately once. |
 | 503 | `settlement_busy` | The settlement log was contended | Retry after a short backoff. |
@@ -37,7 +37,7 @@ content already delivered is charged even if the stream ends early.
   fail the same way and wastes the rate limit.
 - Use exponential backoff with jitter for `503`/`500`, capped at a few attempts. Respect `Retry-After` exactly for
   `429`; it is in seconds.
-- Count rate-limit hits. Repeated `rate_limit_exceeded` means the workload needs a higher tier or fewer calls.
+- Count rate-limit hits. Repeated `rate_limit_exceeded` means the workload needs fewer, larger calls.
 
 ## Streaming
 
@@ -48,7 +48,7 @@ errors (auth, funds, cap, rate limit, capacity, routing) still come back as norm
 ## Output
 
 Tell the user what failed in one line using the message's own numbers, what you did (waited N s, switched model,
-shrunk the request), and what only the owner can fix (add USDC, raise the cap, issue a new key, stake more).
+shrunk the request), and what only the owner can fix (add USDG, raise the cap, issue a new key).
 
 ## Failure modes
 

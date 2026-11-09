@@ -1,35 +1,24 @@
 import { describe, expect, it } from "vitest";
-import { quote, settlementPayload, sha256Hex, tierCeiling, tierFor, tierLadder } from "../src/protocol.js";
+import { quote, settlementPayload, sha256Hex } from "../src/protocol.js";
 import { PARAMS, RECORD_1 } from "./fixtures.js";
 
 describe("quote", () => {
-  it("matches a real settled record (192 tokens at 1.8 USDC per 1M, no tier)", () => {
-    const q = quote(192, 1800, 0, PARAMS);
-    expect(q).toMatchObject({ base: RECORD_1.base, discount: 0, fee: RECORD_1.fee, toSponsor: RECORD_1.to_sponsor });
-    expect(q.total).toBe(q.base - q.discount + q.fee);
-    expect(q.toStakers + q.toSponsor + q.toTreasury).toBe(q.fee);
+  it("matches a real settled record (192 tokens at 1.8 USDG per 1M) under the sponsor share it was settled with", () => {
+    const q = quote(192, 1800, { ...PARAMS, sponsor_share_bps: 4000 });
+    expect(q).toMatchObject({ base: RECORD_1.base, fee: RECORD_1.fee, toSponsor: RECORD_1.to_sponsor, toTreasury: RECORD_1.to_treasury });
+    expect(q.total).toBe(q.base + q.fee);
   });
-  it("applies the discount to the provider cost only", () => {
-    const q = quote(1_000_000, 1000, 1000, PARAMS);
+  it("gives the sponsor its share of the fee, rounded down, and the treasury the remainder", () => {
+    const q = quote(1_000_000, 1000, PARAMS);
     expect(q.base).toBe(1_000_000);
-    expect(q.discount).toBe(100_000);
     expect(q.fee).toBe(100_000);
-    expect(q.total).toBe(1_000_000);
-  });
-});
-
-describe("tiers", () => {
-  it("places stakes on the ladder from params", () => {
-    expect(tierFor(0, PARAMS).name).toBe("No tier");
-    expect(tierFor(PARAMS.tier1_stake, PARAMS).level).toBe(1);
-    expect(tierFor(PARAMS.tier2_stake - 1, PARAMS).level).toBe(1);
-    expect(tierFor(PARAMS.tier3_stake * 2, PARAMS).level).toBe(3);
-  });
-  it("sets priority from Tier 2 and raises the congestion ceiling per tier", () => {
-    const ladder = tierLadder(PARAMS);
-    expect(ladder.map((t) => t.priority)).toEqual([false, false, true, true]);
-    expect(ladder.map((t) => t.congestionCeiling)).toEqual([480, 519, 559, 600]);
-    expect(tierCeiling(3, PARAMS)).toBe(PARAMS.congestion_capacity_rpm);
+    expect(q.toSponsor).toBe(80_000);
+    expect(q.toTreasury).toBe(20_000);
+    expect(q.total).toBe(1_100_000);
+    const odd = quote(192, 1800, PARAMS);
+    expect(odd.fee).toBe(35);
+    expect(odd.toSponsor).toBe(28);
+    expect(odd.toSponsor + odd.toTreasury).toBe(odd.fee);
   });
 });
 
